@@ -12,10 +12,8 @@ package appeng.crafting;
 
 import static appeng.util.Platform.writeAEStackListNBT;
 
-import java.text.NumberFormat;
 import java.util.Collection;
 import java.util.IdentityHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 import javax.annotation.Nonnull;
@@ -23,8 +21,6 @@ import javax.annotation.Nonnull;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.EnumChatFormatting;
-import net.minecraft.util.IChatComponent;
 
 import appeng.api.AEApi;
 import appeng.api.config.Actionable;
@@ -374,21 +370,12 @@ public class MECraftingInventory implements IMEInventory<IAEStack> {
             EntityPlayer player = ((PlayerSource) src).player;
             if (player == null || expected == null) return;
 
-            IChatComponent missingItem = expected.getChatComponent();
-
-            missingItem.getChatStyle().setColor(EnumChatFormatting.GOLD);
-            String expectedCount = EnumChatFormatting.RED
-                    + NumberFormat.getNumberInstance(Locale.getDefault()).format(expected.getStackSize())
-                    + EnumChatFormatting.RESET;
-            String extractedCount = EnumChatFormatting.RED + NumberFormat.getNumberInstance(Locale.getDefault())
-                    .format(extracted == null ? 0 : extracted.getStackSize()) + EnumChatFormatting.RESET;
-
             player.addChatMessage(
                     new ChatComponentTranslation(
                             PlayerMessages.CraftingCantExtract.getUnlocalized(),
-                            extractedCount,
-                            expectedCount,
-                            missingItem));
+                            Platform.formatChatCount(extracted == null ? 0 : extracted.getStackSize()),
+                            Platform.formatChatCount(expected.getStackSize()),
+                            Platform.formatChatStackName(expected)));
 
         } catch (Exception ex) {
             AELog.error(ex, "Could not notify player of crafting failure");
