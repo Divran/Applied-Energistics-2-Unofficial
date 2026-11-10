@@ -115,7 +115,11 @@ public class NetworkInventoryHandler<T extends IAEStack<T>> implements IMENetwor
             return input;
         }
 
+        // Only simulations are traced, a real insertion never sees a trace.
+        final InjectTrace trace = InjectTrace.current(type);
+
         if (this.testPermission(src, SecurityPermissions.INJECT)) {
+            if (trace != null) trace.denied(this.traceGrid());
             this.surface(this, type);
             return input;
         }
@@ -132,7 +136,10 @@ public class NetworkInventoryHandler<T extends IAEStack<T>> implements IMENetwor
 
             if (inv.canAccept(input)
                     && (inv.isPrioritized(input) || inv.extractItems(input, Actionable.SIMULATE, src) != null)) {
+                final InjectTrace.Entry entry = this.beginTrace(trace, inv, inv.getSticky());
+                final long before = input.getStackSize();
                 input = inv.injectItems(input, type, src);
+                InjectTrace.finish(entry, before, input);
                 if (!stickyInventoryFound && inv.getSticky()) stickyInventoryFound = true;
             }
         }
@@ -161,7 +168,9 @@ public class NetworkInventoryHandler<T extends IAEStack<T>> implements IMENetwor
                         && (inv.isPrioritized(input) || inv.extractItems(input, Actionable.SIMULATE, src) != null)) {
                     long before = input.getStackSize();
 
+                    final InjectTrace.Entry entry = this.beginTrace(trace, inv, false);
                     input = inv.injectItems(input, type, src);
+                    InjectTrace.finish(entry, before, input);
                     if (input == null) break outer;
 
                     if (type == Actionable.SIMULATE && inv.validForPass(2)) {
@@ -207,12 +216,15 @@ public class NetworkInventoryHandler<T extends IAEStack<T>> implements IMENetwor
                     if (inv.canAccept(input) && !inv.isPrioritized(input)) {
                         if (type == Actionable.SIMULATE) {
                             final long pass1Inserted = simulatedPass1Inserted.getOrDefault(i, 0);
+                            final long before = input.getStackSize();
+                            final InjectTrace.Entry entry = this.beginTrace(trace, inv, false);
                             if (pass1Inserted > 0) {
                                 final T pass2Input = input.copy();
                                 pass2Input.setStackSize(pass2Input.getStackSize() + pass1Inserted);
 
                                 final T pass2Leftover = inv.injectItems(pass2Input, type, src);
                                 if (pass2Leftover == null) {
+                                    InjectTrace.finish(entry, before, null);
                                     input = null;
                                     break outer;
                                 }
@@ -223,6 +235,8 @@ public class NetworkInventoryHandler<T extends IAEStack<T>> implements IMENetwor
                             } else {
                                 input = inv.injectItems(input, type, src);
                             }
+                            // Pass 1 recorded its own share, this only counts what pass 2 added.
+                            InjectTrace.finish(entry, before, input);
                         } else {
                             input = inv.injectItems(input, type, src);
                         }
@@ -250,6 +264,18 @@ public class NetworkInventoryHandler<T extends IAEStack<T>> implements IMENetwor
         this.surface(this, type);
 
         return input;
+    }
+
+    private InjectTrace.Entry beginTrace(final InjectTrace trace, final IMEInventoryHandler<T> inv,
+            final boolean stickyClaim) {
+        if (trace == null) {
+            return null;
+        }
+        return trace.begin(inv, this.traceGrid(), this.getDepth(Actionable.SIMULATE).size(), stickyClaim);
+    }
+
+    private IGrid traceGrid() {
+        return this.security == null ? null : this.security.getGrid();
     }
 
     private boolean diveList(final NetworkInventoryHandler<T> networkInventoryHandler, final Actionable type) {
